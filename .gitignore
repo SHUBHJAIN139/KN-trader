@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables - NEVER commit
+.env
+
+# Google credentials - NEVER commit
+credentials/*.json
+!credentials/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary fix backups & scratch scripts
+backup_*/
+**/backup_*/
+fix*.py
+fix*.bat
+test_*.py
