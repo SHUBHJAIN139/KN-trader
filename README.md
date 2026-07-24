@@ -2,13 +2,16 @@
 
 > Automated stock signal system that ports a TradingView Pine Script indicator to Python, fetches top volume stocks from Chartink screener, filters signals using EMA Crossovers + ATR TP/SL + Volume confirmation, and logs results to **Google Sheets** and **Telegram**.
 
+> 📢 **EDUCATIONAL PURPOSE ONLY**: This repository is strictly an educational project for technical analysis & strategy automation demonstration. It does NOT constitute financial or investment advice. Trading equities involves significant financial risk.
+
 [![GitHub Actions Status](https://github.com/SHUBHJAIN139/KN-trader/actions/workflows/daily.yml/badge.svg)](https://github.com/SHUBHJAIN139/KN-trader/actions/workflows/daily.yml)
 
 📱 **[▶️ Click Here to Run Strategy from Any PC or Phone (GitHub Actions Dispatch)](https://github.com/SHUBHJAIN139/KN-trader/actions/workflows/daily.yml)**
 
 ---
 
-⚠️ **DISCLAIMER**: This software is for educational purposes only. It does NOT constitute financial advice. Trading Indian equities involves substantial risk of financial loss. Always conduct your own research before trading.
+> ⚠️ **DISCLAIMER & NOTICE**  
+> This software is created for **educational and research purposes only**. The automated signals (EMA Crossover, ATR Stop-Loss, Take-Profit levels) are generated programmatically based on user-configured rules. Past strategy performance does not guarantee future results. Always consult a certified financial professional before making trading decisions.
 
 ---
 
