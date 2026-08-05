@@ -19,9 +19,9 @@ if errorlevel 1 (
 )
 
 REM Run the pipeline
-echo [2/3] Running KN Trader (4h, top 50, vol ratio >= 1.5)...
+echo [2/3] Running KN Trader (4h & 1w weekly, top 50, vol ratio >= 1.5)...
 echo.
-E:\python311\python.exe -m src.pipeline --timeframe 4h --top-n 50 --min-vol-ratio 1.5
+E:\python311\python.exe -m src.pipeline --timeframe 4h 1w --top-n 50 --min-vol-ratio 1.5
 
 echo.
 echo [3/3] Done. Check Google Sheet and Telegram group.

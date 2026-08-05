@@ -180,14 +180,34 @@ def run_pipeline(
     return result
 
 
+def parse_timeframes(tf_arg: str | list[str]) -> list[str]:
+    """Parse single or multiple timeframe specifications into a list of unique timeframes."""
+    if isinstance(tf_arg, str):
+        items = tf_arg.split(",")
+    else:
+        items = []
+        for a in tf_arg:
+            items.extend(a.split(","))
+
+    valid_map = {"1d": "1d", "4h": "4h", "1w": "1w", "weekly": "1w", "wk": "1w"}
+    res = []
+    for item in items:
+        clean = item.strip().lower()
+        if clean in ("all", "*"):
+            return ["1d", "4h", "1w"]
+        if clean in valid_map and valid_map[clean] not in res:
+            res.append(valid_map[clean])
+    return res or ["1d"]
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="KN Smart TP SL Trader v4.0 CLI")
     parser.add_argument(
         "--timeframe",
-        choices=["1d", "4h"],
-        default="1d",
-        help="Timeframe to scan (1d or 4h)",
+        nargs="+",
+        default=["1d"],
+        help="Timeframe(s) to scan: 1d, 4h, 1w, or combinations like '4h 1w' or '4h,1w'",
     )
     parser.add_argument(
         "--top-n",
@@ -222,15 +242,18 @@ def main() -> None:
     # Set parameters with fallback to config
     top_n = args.top_n if args.top_n is not None else config.top_n
     min_vol_ratio = args.min_vol_ratio if args.min_vol_ratio is not None else config.min_vol_ratio
+    requested_tfs = parse_timeframes(args.timeframe)
 
-    run_pipeline(
-        config=config,
-        timeframe=args.timeframe,
-        top_n=top_n,
-        min_vol_ratio=min_vol_ratio,
-        limit=args.limit,
-        dry_run=args.dry_run,
-    )
+    logger.info("Executing pipeline for timeframes: %s", ", ".join(requested_tfs))
+    for tf in requested_tfs:
+        run_pipeline(
+            config=config,
+            timeframe=tf,
+            top_n=top_n,
+            min_vol_ratio=min_vol_ratio,
+            limit=args.limit,
+            dry_run=args.dry_run,
+        )
 
 
 if __name__ == "__main__":

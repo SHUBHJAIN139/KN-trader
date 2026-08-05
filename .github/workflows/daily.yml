@@ -5,6 +5,11 @@ on:
     # 3:30 AM UTC = 9:00 AM IST (Mon-Fri only)
     - cron: '30 3 * * 1-5'
   workflow_dispatch:  # Allow manual trigger
+    inputs:
+      timeframe:
+        description: 'Timeframe(s) to run (e.g. 4h, 1w, 4h 1w, or all)'
+        required: false
+        default: '4h 1w'
 
 jobs:
   run-signals:
@@ -31,7 +36,7 @@ jobs:
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
 
-      - name: Run daily signals (1d timeframe)
+      - name: Run signals pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -39,14 +44,6 @@ jobs:
           GOOGLE_SHEET_NAME: ${{ secrets.GOOGLE_SHEET_NAME || 'KN Trader Signals' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-        run: python -m src.pipeline --timeframe 1d
-
-      - name: Run 4h signals
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GOOGLE_CREDENTIALS_PATH: credentials/service-account.json
-          GOOGLE_SHEET_NAME: ${{ secrets.GOOGLE_SHEET_NAME || 'KN Trader Signals' }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-        run: python -m src.pipeline --timeframe 4h
+        run: |
+          TF="${{ inputs.timeframe || '4h 1w' }}"
+          python -m src.pipeline --timeframe $TF

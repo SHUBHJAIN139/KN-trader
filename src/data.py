@@ -279,12 +279,52 @@ class DataFetcher:
         self, symbol: str, timeframe: str = "1d"
     ) -> Optional[pd.DataFrame]:
         """Fetch OHLCV data for a single stock."""
-        if timeframe == "1d":
+        clean_tf = timeframe.lower().strip()
+        if clean_tf == "1d":
             return self._nse.fetch_daily(symbol)
-        elif timeframe == "4h":
+        elif clean_tf == "4h":
             return TwelveDataFetcher(self._td_api_key).fetch_4h(symbol)
+        elif clean_tf in ("1w", "weekly", "wk"):
+            df_1d = self._nse.fetch_daily(symbol)
+            if df_1d is None or df_1d.empty:
+                raw_yf = self._fetch_batch_daily_yfinance([symbol])
+                df_1d = raw_yf.get(symbol)
+            if df_1d is None or df_1d.empty:
+                return None
+            return df_1d.resample("1W").agg(
+                {"open": "first", "high": "max", "low": "min",
+                 "close": "last", "volume": "sum"}
+            ).dropna()
         else:
             raise ValueError(f"Unsupported timeframe: {timeframe!r}")
+
+    def _fetch_batch_daily_yfinance(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
+        """Fetch daily OHLCV for symbols in a single batch yfinance call (used as fallback for 1d/1w)."""
+        import yfinance as yf
+        tickers = [f"{s.replace('$', '').replace(' ', '').strip()}.NS" for s in symbols]
+        try:
+            data = yf.download(
+                tickers,
+                period="1y",
+                interval="1d",
+                group_by="ticker",
+                progress=False,
+                threads=True,
+            )
+            if data.empty:
+                return {}
+            results = {}
+            for symbol in symbols:
+                try:
+                    df = extract_ticker_df(data, symbol)
+                    if df is not None and not df.empty:
+                        results[symbol] = df[["open", "high", "low", "close", "volume"]]
+                except Exception:
+                    continue
+            return results
+        except Exception as e:
+            logger.warning("yfinance daily batch failed: %s", e)
+            return {}
 
     def _fetch_batch_hourly_yfinance(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
         """Fetch 1h OHLCV for all symbols in a single batch yfinance call."""
@@ -318,14 +358,42 @@ class DataFetcher:
         self, symbols: list[str], timeframe: str = "1d"
     ) -> dict[str, pd.DataFrame]:
         """Fetch OHLCV for multiple stocks."""
-        if timeframe == "1d":
-            logger.info("Fetching daily data for %d stocks via Bhavcopy...", len(symbols))
+        clean_tf = timeframe.lower().strip()
+        total = len(symbols)
+
+        if clean_tf == "1d":
+            logger.info("Fetching daily data for %d stocks via Bhavcopy...", total)
             results = self._nse.fetch_daily_batch(symbols)
-            logger.info("Bhavcopy complete: %d/%d stocks have data", len(results), len(symbols))
+            if not results:
+                logger.info("Bhavcopy empty, falling back to yfinance daily batch...")
+                results = self._fetch_batch_daily_yfinance(symbols)
+            logger.info("Daily complete: %d/%d stocks have data", len(results), total)
+            return results
+
+        if clean_tf in ("1w", "weekly", "wk"):
+            logger.info("Fetching weekly (1w) data for %d stocks via yfinance batch...", total)
+            daily_results = self._fetch_batch_daily_yfinance(symbols)
+            if not daily_results:
+                logger.info("yfinance daily batch empty, falling back to Bhavcopy...")
+                daily_results = self._nse.fetch_daily_batch(symbols)
+
+            results = {}
+            for symbol, df_1d in daily_results.items():
+                try:
+                    df_1w = df_1d.resample("1W").agg(
+                        {"open": "first", "high": "max", "low": "min",
+                         "close": "last", "volume": "sum"}
+                    ).dropna()
+                    if not df_1w.empty:
+                        results[symbol] = df_1w
+                except Exception as e:
+                    logger.warning("Failed to resample %s to 1w: %s", symbol, e)
+                    continue
+
+            logger.info("Weekly batch complete: %d/%d stocks for 1w", len(results), total)
             return results
 
         # 4h: batch yfinance download
-        total = len(symbols)
         logger.info("Fetching 4h data for %d stocks via yfinance batch...", total)
         raw_1h = self._fetch_batch_hourly_yfinance(symbols)
         results = {}
