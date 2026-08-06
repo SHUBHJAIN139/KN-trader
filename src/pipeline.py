@@ -220,6 +220,11 @@ def main() -> None:
         help="Overriding minimum volume ratio on the signal bar",
     )
     parser.add_argument(
+        "--no-vol-filter",
+        action="store_true",
+        help="Disable volume filtering completely (include all signals regardless of volume ratio)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         help="Limit number of stocks to scan (useful for quick testing)",
@@ -241,7 +246,14 @@ def main() -> None:
 
     # Set parameters with fallback to config
     top_n = args.top_n if args.top_n is not None else config.top_n
-    min_vol_ratio = args.min_vol_ratio if args.min_vol_ratio is not None else config.min_vol_ratio
+
+    if args.no_vol_filter:
+        min_vol_ratio = 0.0
+    elif args.min_vol_ratio is not None:
+        min_vol_ratio = args.min_vol_ratio
+    else:
+        min_vol_ratio = config.min_vol_ratio
+
     requested_tfs = parse_timeframes(args.timeframe)
 
     logger.info("Executing pipeline for timeframes: %s", ", ".join(requested_tfs))

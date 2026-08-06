@@ -2,14 +2,31 @@ name: KN Smart TP SL Trader — Daily Signal Run
 
 on:
   schedule:
-    # 3:30 AM UTC = 9:00 AM IST (Mon-Fri only)
+    # 3:30 AM UTC = 9:00 AM IST (Mon-Fri only) - runs automatically even when PC is off
     - cron: '30 3 * * 1-5'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
     inputs:
       timeframe:
-        description: 'Timeframe(s) to run (e.g. 4h, 1w, 4h 1w, or all)'
-        required: false
+        description: 'Timeframe(s) to scan'
+        type: choice
+        options:
+          - '4h 1w'
+          - '4h'
+          - '1w'
+          - '1d'
+          - '1d 4h 1w'
         default: '4h 1w'
+      vol_filter:
+        description: 'Volume Filter Mode'
+        type: choice
+        options:
+          - 'with_filter_1.5'
+          - 'no_filter_0.0'
+        default: 'with_filter_1.5'
+      top_n:
+        description: 'Top N volume stocks to scan from Chartink'
+        type: string
+        default: '50'
 
 jobs:
   run-signals:
@@ -46,4 +63,10 @@ jobs:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
         run: |
           TF="${{ inputs.timeframe || '4h 1w' }}"
-          python -m src.pipeline --timeframe $TF
+          TOP="${{ inputs.top_n || '50' }}"
+          
+          if [ "${{ inputs.vol_filter }}" = "no_filter_0.0" ]; then
+            python -m src.pipeline --timeframe $TF --top-n $TOP --no-vol-filter
+          else
+            python -m src.pipeline --timeframe $TF --top-n $TOP --min-vol-ratio 1.5
+          fi

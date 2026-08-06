@@ -20,9 +20,9 @@ if errorlevel 1 (
 )
 
 REM Run the pipeline (volume filter disabled)
-echo [2/3] Running KN Trader (4h, top 50, vol ratio >= 1.0 - ALL signals)...
+echo [2/3] Running KN Trader (4h & 1w weekly, top 50, WITHOUT volume filter - ALL signals)...
 echo.
-E:\python311\python.exe -m src.pipeline --timeframe 4h --top-n 50 --min-vol-ratio 1.0
+E:\python311\python.exe -m src.pipeline --timeframe 4h 1w --top-n 50 --no-vol-filter
 
 echo.
 echo [3/3] Done. Check Google Sheet and Telegram group.
