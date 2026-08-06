@@ -24,9 +24,9 @@ class TelegramNotifier:
             bot_token: HTTP API bot token from BotFather.
             chat_id: Unique chat ID or channel username (e.g. '@mychannel').
         """
-        self._bot_token = bot_token
-        self._chat_id = chat_id
-        self._api_url = f"https://api.telegram.org/bot{bot_token}"
+        self._bot_token = bot_token.strip() if bot_token else ""
+        self._chat_id = chat_id.strip() if chat_id else ""
+        self._api_url = f"https://api.telegram.org/bot{self._bot_token}"
         self._last_send_time = 0.0
 
     def _wait(self) -> None:
@@ -40,7 +40,14 @@ class TelegramNotifier:
             time.sleep(sleep_time)
 
     def _send_message(self, text: str) -> bool:
-        """Send message via Telegram Bot API with 429 rate limit retries."""
+        """Send message via Telegram Bot API with 429 rate limit retries and Markdown/Plaintext fallback."""
+        if not self._bot_token or not self._chat_id:
+            logger.error(
+                "Telegram TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing or empty. "
+                "Please configure these secrets in GitHub / .env."
+            )
+            return False
+
         url = f"{self._api_url}/sendMessage"
         payload = {
             "chat_id": self._chat_id,
@@ -58,21 +65,72 @@ class TelegramNotifier:
 
                 # Auto-retry on 429
                 if resp.status_code == 429:
-                    retry_after = 5.0  # default fallback
-                    headers = resp.headers
-                    for h_name, h_val in headers.items():
-                        if h_name.lower() == "retry-after":
-                            try:
-                                retry_after = float(h_val)
-                            except ValueError:
-                                pass
-                            break
+                    retry_after = 5.0
+                    try:
+                        data = resp.json()
+                        retry_after = float(data.get("parameters", {}).get("retry_after", 5.0))
+                    except Exception:
+                        pass
                     logger.warning(
                         "Telegram rate limit (429) hit. Waiting %.1f seconds (attempt %d/%d)...",
                         retry_after, attempt + 1, max_retries
                     )
                     time.sleep(retry_after)
                     continue
+
+                # Auto-fallback on 400 (e.g. Markdown parsing error or chat issue / supergroup migration)
+                if resp.status_code == 400:
+                    err_desc = ""
+                    migrated_id = None
+                    try:
+                        res_json = resp.json()
+                        err_desc = res_json.get("description", "")
+                        migrated_id = res_json.get("parameters", {}).get("migrate_to_chat_id")
+                    except Exception:
+                        err_desc = resp.text
+
+                    logger.warning("Telegram API 400 Bad Request error: '%s'", err_desc)
+
+                    if migrated_id:
+                        logger.warning(
+                            "Telegram Group was upgraded to Supergroup. Auto-migrating chat_id from %s -> %s...",
+                            self._chat_id, migrated_id
+                        )
+                        self._chat_id = str(migrated_id)
+                        payload["chat_id"] = str(migrated_id)
+                        mig_resp = requests.post(url, json=payload, timeout=15)
+                        if mig_resp.ok:
+                            logger.info("Telegram message sent successfully to upgraded Supergroup ID %s!", migrated_id)
+                            self._last_send_time = time.time()
+                            return True
+
+                    if "can't parse entities" in err_desc.lower() or "markdown" in err_desc.lower() or "parse" in err_desc.lower():
+                        logger.info("Attempting plain text fallback (without Markdown formatting)...")
+                        plain_payload = {
+                            "chat_id": self._chat_id,
+                            "text": text.replace("*", "").replace("`", "").replace("_", ""),
+                            "disable_web_page_preview": True,
+                        }
+                        plain_resp = requests.post(url, json=plain_payload, timeout=15)
+                        if plain_resp.ok:
+                            logger.info("Telegram message sent successfully using Plain Text fallback!")
+                            self._last_send_time = time.time()
+                            return True
+                        else:
+                            try:
+                                plain_err = plain_resp.json().get("description", plain_resp.text)
+                            except Exception:
+                                plain_err = plain_resp.text
+                            logger.error("Telegram Plain Text fallback also failed: %s", plain_err)
+                            return False
+                    else:
+                        logger.error(
+                            "Telegram 400 Error details: '%s'. "
+                            "Common causes: 1) TELEGRAM_CHAT_ID secret on GitHub is outdated, 2) Bot is not added to Group/Channel, "
+                            "3) TELEGRAM_BOT_TOKEN is incorrect.",
+                            err_desc
+                        )
+                        return False
 
                 resp.raise_for_status()
                 result = resp.json()
@@ -100,7 +158,6 @@ class TelegramNotifier:
                     logger.error(
                         "Telegram request failed after all retries. Last error: %s",
                         req_err,
-                        exc_info=True
                     )
                     return False
             except Exception:
