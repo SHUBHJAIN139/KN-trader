@@ -8,9 +8,12 @@ the chart overlay exactly.
 from __future__ import annotations
 
 from datetime import date
+import logging
 import pandas as pd
 
 from src.models import TradeSignal
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -158,17 +161,84 @@ class KNSmartTPSLSignals:
         symbol: str,
         timeframe: str,
         lookback: int = 5,
+        max_signal_age_days: int | None = None,
     ) -> list[TradeSignal]:
-        """Scan the last *lookback* rows for the most recent signal."""
+        """Scan recent rows for active signals that are fresh and have NOT hit TP or SL yet.
+
+        Filtering rules:
+        1. Crossover occurred within the last `lookback` bars.
+        2. Signal date must be fresh (max 3 days for 1d/4h, max 8 days for 1w).
+        3. Subsequent price action from crossover bar to latest bar must NOT have touched SL or TP1.
+        """
+        if df.empty or len(df) < 2:
+            return []
+
+        # Determine age limit based on timeframe if not explicitly passed
+        if max_signal_age_days is None:
+            clean_tf = timeframe.lower().strip()
+            if clean_tf in ("1w", "weekly", "wk"):
+                max_signal_age_days = 8  # Current week or previous week
+            elif clean_tf == "4h":
+                max_signal_age_days = 3  # Last 3 days
+            else:
+                max_signal_age_days = 3  # Last 3 days for 1d
+
+        today = date.today()
         tail: pd.DataFrame = df.tail(lookback)
+        full_len = len(df)
 
         for idx in reversed(tail.index):
             row: pd.Series = tail.loc[idx]
+            is_buy = bool(row["buy_signal"])
+            is_sell = bool(row["sell_signal"])
 
-            if row["buy_signal"]:
-                return [self.get_trade_levels(row, "BUY", symbol, timeframe)]
+            if not (is_buy or is_sell):
+                continue
 
-            if row["sell_signal"]:
-                return [self.get_trade_levels(row, "SELL", symbol, timeframe)]
+            signal_type = "BUY" if is_buy else "SELL"
+            sig = self.get_trade_levels(row, signal_type, symbol, timeframe)
+
+            # Rule 1: Check date freshness
+            age_days = (today - sig.signal_date).days
+            if age_days > max_signal_age_days:
+                logger.debug(
+                    "Signal for %s (%s) on %s rejected: too old (%d days > %d max)",
+                    symbol, signal_type, sig.signal_date, age_days, max_signal_age_days
+                )
+                continue
+
+            # Rule 2: Check subsequent price action (from signal bar + 1 to latest bar)
+            try:
+                sig_pos = df.index.get_loc(idx)
+                if isinstance(sig_pos, slice):
+                    sig_pos = sig_pos.start
+            except Exception:
+                sig_pos = None
+
+            if sig_pos is not None and sig_pos < full_len - 1:
+                subsequent_df = df.iloc[sig_pos + 1:]
+                hit_target_or_sl = False
+
+                if signal_type == "BUY":
+                    # For BUY: SL hit if low <= sl, TP hit if high >= tp1
+                    sl_hit = (subsequent_df["low"] <= sig.sl).any()
+                    tp_hit = (subsequent_df["high"] >= sig.tp1).any()
+                    if sl_hit or tp_hit:
+                        hit_target_or_sl = True
+                else:
+                    # For SELL: SL hit if high >= sl, TP hit if low <= tp1
+                    sl_hit = (subsequent_df["high"] >= sig.sl).any()
+                    tp_hit = (subsequent_df["low"] <= sig.tp1).any()
+                    if sl_hit or tp_hit:
+                        hit_target_or_sl = True
+
+                if hit_target_or_sl:
+                    logger.info(
+                        "Signal for %s (%s) on %s rejected: TP or SL already hit in subsequent bars",
+                        symbol, signal_type, sig.signal_date
+                    )
+                    continue
+
+            return [sig]
 
         return []
