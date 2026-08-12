@@ -40,11 +40,11 @@ Chartink Screener ──→ screener.py ──→ Stock List
 
 - **Pine Script Fidelity** — Exact port of the KN Smart TP SL indicator (EMA 5/13 crossover + ATR-based TP1/TP2/TP3/SL)
 - **Dynamic Stock Universe** — Fetches stocks daily from your [Chartink screener](https://chartink.com/screener/trading-view-11042052)
-- **Dual Timeframe** — Daily (1d via NSE API) and 4-hour (4h via Twelve Data, resampled from 1h)
+- **Multi-Timeframe Support** — Daily (`1d`), 4-Hour (`4h`), and Weekly (`1w`) timeframes
+- **Interactive Telegram Bot Commands** — Send `/scan`, `/scan 4h`, `/scan 1w`, or `/nofilter` directly in Telegram chat to get instant market signal reports!
 - **Google Sheets Output** — Signals written to dated worksheet tabs for easy review
 - **Telegram Alerts** — Rich formatted push notifications with entry/SL/TP levels
-- **GitHub Actions** — Automated daily runs at 9:00 AM IST (Mon-Fri)
-- **Zero TA-Lib** — Manual EMA/ATR using pandas (no C dependencies)
+- **Cloud-Native Automation** — Automated daily runs via GitHub Actions (works even when your PC is off)
 
 ## 📁 Project Structure
 
