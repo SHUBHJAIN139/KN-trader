@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: kn-trader-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m src.bot
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_CREDENTIALS_PATH
+        value: credentials/service-account.json
+      - key: TWELVE_DATA_API_KEY
+        sync: false
